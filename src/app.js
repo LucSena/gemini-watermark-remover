@@ -19,16 +19,20 @@ import {
 import JSZip from 'jszip';
 import mediumZoom from 'medium-zoom';
 import { removeBackground } from '@imgly/background-removal';
+import { ImageSegmenter, FilesetResolver } from '@mediapipe/tasks-vision';
 
-// global state
+// ── Global state ─────────────────────────────────────────────────────────────
+
 let enginePromise = null;
 let workerClient = null;
 let imageQueue = [];
 let processedCount = 0;
 let zoom = null;
-let currentMode = 'watermark'; // 'watermark' | 'background'
+// 'watermark' | 'portrait' | 'general'
+let currentMode = 'watermark';
 
-// dom elements references
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 const singlePreview = document.getElementById('singlePreview');
@@ -43,6 +47,8 @@ const processedInfo = document.getElementById('processedInfo');
 const downloadBtn = document.getElementById('downloadBtn');
 const copyBtn = document.getElementById('copyBtn');
 const resetBtn = document.getElementById('resetBtn');
+
+// ── Watermark engine ──────────────────────────────────────────────────────────
 
 async function getEngine() {
     if (!enginePromise) {
@@ -59,11 +65,7 @@ function getEstimatedWatermarkInfo(item) {
     const { width, height } = item.originalImg;
     const config = detectWatermarkConfig(width, height);
     const position = calculateWatermarkPosition(width, height, config);
-    return {
-        size: config.logoSize,
-        position,
-        config
-    };
+    return { size: config.logoSize, position, config };
 }
 
 function disableWorkerClient(reason) {
@@ -73,76 +75,157 @@ function disableWorkerClient(reason) {
     workerClient = null;
 }
 
-// ── Mode switching ──────────────────────────────────────────────────────────
-
-function setupModeSwitcher() {
-    const modeWatermarkBtn = document.getElementById('modeWatermark');
-    const modeBgBtn = document.getElementById('modeBg');
-
-    if (modeWatermarkBtn) modeWatermarkBtn.addEventListener('click', () => setMode('watermark'));
-    if (modeBgBtn) modeBgBtn.addEventListener('click', () => setMode('background'));
-}
-
-function setMode(mode) {
-    currentMode = mode;
-
-    const modeWatermarkBtn = document.getElementById('modeWatermark');
-    const modeBgBtn = document.getElementById('modeBg');
-    const subtitle = document.getElementById('modeSubtitle');
-
-    const activeClass = 'px-5 py-2 rounded-lg text-sm font-semibold transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow';
-    const inactiveClass = 'px-5 py-2 rounded-lg text-sm font-semibold transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200';
-
-    if (mode === 'watermark') {
-        if (modeWatermarkBtn) modeWatermarkBtn.className = activeClass;
-        if (modeBgBtn) modeBgBtn.className = inactiveClass;
-        if (subtitle) {
-            subtitle.setAttribute('data-i18n', 'main.subtitle.watermark');
-            subtitle.textContent = i18n.t('main.subtitle.watermark');
-        }
-    } else {
-        if (modeBgBtn) modeBgBtn.className = activeClass;
-        if (modeWatermarkBtn) modeWatermarkBtn.className = inactiveClass;
-        if (subtitle) {
-            subtitle.setAttribute('data-i18n', 'main.subtitle.bg');
-            subtitle.textContent = i18n.t('main.subtitle.bg');
+async function processImageWithBestPath(file, fallbackImage, options = {}) {
+    if (workerClient) {
+        try {
+            return await workerClient.processBlob(file, options);
+        } catch (error) {
+            console.warn('worker process failed, fallback to main thread:', error);
+            disableWorkerClient(error);
         }
     }
-
-    reset();
+    const engine = await getEngine();
+    const canvas = await engine.removeWatermarkFromImage(fallbackImage, options);
+    const blob = await canvasToBlob(canvas);
+    return { blob, meta: canvas.__watermarkMeta || null };
 }
 
-// ── Background removal ──────────────────────────────────────────────────────
+// ── Portrait mode — MediaPipe selfie segmentation ─────────────────────────────
 
-async function processBackgroundRemoval(item) {
+const MEDIAPIPE_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
+const SELFIE_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float32/latest/selfie_segmenter.tflite';
+
+let segmenterPromise = null;
+
+async function getPortraitSegmenter() {
+    if (!segmenterPromise) {
+        segmenterPromise = (async () => {
+            const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM);
+            return ImageSegmenter.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: SELFIE_MODEL,
+                    delegate: 'GPU',
+                },
+                outputCategoryMask: false,
+                outputConfidenceMasks: true,
+                runningMode: 'IMAGE',
+            });
+        })().catch(err => {
+            segmenterPromise = null;
+            throw err;
+        });
+    }
+    return segmenterPromise;
+}
+
+async function processPortraitBgRemoval(item) {
+    setStatusMessage(i18n.t('portrait.status.loading_model') + '...');
+    const segmenter = await getPortraitSegmenter();
+    setStatusMessage(i18n.t('portrait.status.processing') + '...');
+
+    const img = item.originalImg;
+    const result = segmenter.segment(img);
+
+    // confidenceMasks: [0]=background, [1]=person (2-class model)
+    // If model only outputs 1 mask, index 0 is foreground/person
+    const masks = result.confidenceMasks;
+    const personMask = masks.length > 1 ? masks[1] : masks[0];
+    const maskData = personMask.getAsFloat32Array();
+
+    // Free GPU resources before heavy canvas work
+    masks.forEach(m => m.close());
+
+    // Draw original onto canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    // Apply confidence mask as alpha (smooth edges come naturally from float32 values)
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+    for (let i = 0; i < maskData.length; i++) {
+        pixels[i * 4 + 3] = Math.round(maskData[i] * 255);
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    setStatusMessage('');
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(
+            blob => blob
+                ? resolve({ blob, meta: { applied: true, decisionTier: 'confirmed' } })
+                : reject(new Error('Failed to encode portrait result')),
+            'image/png'
+        );
+    });
+}
+
+// ── General BG mode — @imgly/background-removal (ISNet) ──────────────────────
+
+async function processGeneralBgRemoval(item) {
     let lastKey = '';
     const blob = await removeBackground(item.file, {
         progress: (key, current, total) => {
             if (total <= 0) return;
-            const label = key !== lastKey ? i18n.t('bg.status.loading_model') : i18n.t('bg.status.processing');
+            const label = key !== lastKey
+                ? i18n.t('bg.status.loading_model')
+                : i18n.t('bg.status.processing');
             lastKey = key;
-            const pct = Math.round((current / total) * 100);
-            setStatusMessage(`${label}: ${pct}%`);
+            setStatusMessage(`${label}: ${Math.round((current / total) * 100)}%`);
         },
-        output: {
-            format: 'image/png',
-            quality: 1,
-        },
+        output: { format: 'image/png', quality: 1 },
     });
     setStatusMessage('');
     return { blob, meta: { applied: true, decisionTier: 'confirmed' } };
 }
 
-// ── Unified processing ──────────────────────────────────────────────────────
+// ── Unified dispatch ──────────────────────────────────────────────────────────
 
 async function processImage(item) {
-    if (currentMode === 'background') {
-        return await processBackgroundRemoval(item);
-    }
-    return await processImageWithBestPath(item.file, item.originalImg);
+    if (currentMode === 'portrait') return processPortraitBgRemoval(item);
+    if (currentMode === 'general') return processGeneralBgRemoval(item);
+    return processImageWithBestPath(item.file, item.originalImg);
 }
 
-// ── init ─────────────────────────────────────────────────────────────────────
+// ── Mode switcher ─────────────────────────────────────────────────────────────
+
+const MODE_ACTIVE = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow';
+const MODE_INACTIVE = 'px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200';
+
+const MODE_BTN_IDS = {
+    watermark: 'modeWatermark',
+    portrait: 'modePortrait',
+    general: 'modeGeneral',
+};
+
+function setupModeSwitcher() {
+    Object.entries(MODE_BTN_IDS).forEach(([mode, id]) => {
+        document.getElementById(id)?.addEventListener('click', () => setMode(mode));
+    });
+}
+
+function setMode(mode) {
+    currentMode = mode;
+
+    // Update tab styles
+    Object.entries(MODE_BTN_IDS).forEach(([m, id]) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.className = m === mode ? MODE_ACTIVE : MODE_INACTIVE;
+    });
+
+    // Update subtitle
+    const subtitle = document.getElementById('modeSubtitle');
+    if (subtitle) {
+        const key = `main.subtitle.${mode}`;
+        subtitle.setAttribute('data-i18n', key);
+        subtitle.textContent = i18n.t(key);
+    }
+
+    reset();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
     try {
@@ -154,18 +237,14 @@ async function init() {
 
         if (canUseWatermarkWorker()) {
             try {
-                workerClient = new WatermarkWorkerClient({
-                    workerUrl: './workers/watermark-worker.js'
-                });
+                workerClient = new WatermarkWorkerClient({ workerUrl: './workers/watermark-worker.js' });
             } catch (workerError) {
                 console.warn('worker unavailable, fallback to main thread:', workerError);
                 workerClient = null;
             }
         }
         if (!workerClient) {
-            getEngine().catch((error) => {
-                console.warn('main thread engine warmup failed:', error);
-            });
+            getEngine().catch(e => console.warn('main thread engine warmup failed:', e));
         }
 
         hideLoading();
@@ -183,6 +262,8 @@ async function init() {
     }
 }
 
+// ── Language switch ───────────────────────────────────────────────────────────
+
 function setupLanguageSwitch() {
     const select = document.getElementById('langSwitch');
     if (!select) return;
@@ -196,6 +277,8 @@ function setupLanguageSwitch() {
     });
 }
 
+// ── Event listeners ───────────────────────────────────────────────────────────
+
 function setupEventListeners() {
     uploadArea.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleFileSelect);
@@ -204,37 +287,26 @@ function setupEventListeners() {
         e.preventDefault();
         uploadArea.classList.add('border-primary', 'bg-emerald-50', 'dark:bg-gray-700/50');
     });
-
     document.addEventListener('dragleave', (e) => {
-        if (e.clientX === 0 && e.clientY === 0) {
+        if (e.clientX === 0 && e.clientY === 0)
             uploadArea.classList.remove('border-primary', 'bg-emerald-50', 'dark:bg-gray-700/50');
-        }
     });
-
     document.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('border-primary', 'bg-emerald-50', 'dark:bg-gray-700/50');
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            handleFiles(Array.from(e.dataTransfer.files));
-        }
+        if (e.dataTransfer.files?.length) handleFiles(Array.from(e.dataTransfer.files));
     });
-
     document.addEventListener('paste', (e) => {
-        const items = e.clipboardData.items;
         const files = [];
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
-                files.push(items[i].getAsFile());
-            }
+        for (const item of e.clipboardData.items) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) files.push(item.getAsFile());
         }
-        if (files.length > 0) handleFiles(files);
+        if (files.length) handleFiles(files);
     });
 
     downloadAllBtn.addEventListener('click', downloadAll);
     resetBtn.addEventListener('click', reset);
-    window.addEventListener('beforeunload', () => {
-        disableWorkerClient('beforeunload');
-    });
+    window.addEventListener('beforeunload', () => disableWorkerClient('beforeunload'));
 }
 
 function reset() {
@@ -249,41 +321,26 @@ function reset() {
     uploadArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function handleFileSelect(e) {
-    handleFiles(Array.from(e.target.files));
-}
+function handleFileSelect(e) { handleFiles(Array.from(e.target.files)); }
 
 function handleFiles(files) {
     setStatusMessage('');
-
-    const validFiles = files.filter(file => {
-        if (!file.type.match('image/(jpeg|png|webp)')) return false;
-        if (file.size > 20 * 1024 * 1024) return false;
-        return true;
-    });
-
-    if (validFiles.length === 0) return;
+    const valid = files.filter(f => f.type.match('image/(jpeg|png|webp)') && f.size <= 20 * 1024 * 1024);
+    if (!valid.length) return;
 
     imageQueue.forEach(item => {
         if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
         if (item.processedUrl) URL.revokeObjectURL(item.processedUrl);
     });
 
-    imageQueue = validFiles.map((file, index) => ({
-        id: Date.now() + index,
-        file,
-        name: file.name,
-        status: 'pending',
-        originalImg: null,
-        processedMeta: null,
-        processedBlob: null,
-        originalUrl: null,
-        processedUrl: null
+    imageQueue = valid.map((file, i) => ({
+        id: Date.now() + i, file, name: file.name, status: 'pending',
+        originalImg: null, processedMeta: null, processedBlob: null,
+        originalUrl: null, processedUrl: null,
     }));
-
     processedCount = 0;
 
-    if (validFiles.length === 1) {
+    if (valid.length === 1) {
         singlePreview.style.display = 'block';
         multiPreview.style.display = 'none';
         processSingle(imageQueue[0]);
@@ -298,19 +355,18 @@ function handleFiles(files) {
     }
 }
 
-// ── Single image flow ────────────────────────────────────────────────────────
+// ── Meta rendering ────────────────────────────────────────────────────────────
+
+function isBgMode() { return currentMode === 'portrait' || currentMode === 'general'; }
 
 function renderSingleImageMeta(item) {
     if (!item?.originalImg) return;
-
-    if (currentMode === 'background') {
+    if (isBgMode()) {
         originalInfo.innerHTML = `<p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>`;
         return;
     }
-
     const watermarkInfo = resolveDisplayWatermarkInfo(item, getEstimatedWatermarkInfo(item));
     if (!watermarkInfo) return;
-
     originalInfo.innerHTML = `
         <p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>
         <p>${i18n.t('info.watermark')}: ${watermarkInfo.size}×${watermarkInfo.size}</p>
@@ -319,61 +375,56 @@ function renderSingleImageMeta(item) {
 }
 
 function getProcessedStatusLabel(item) {
-    if (currentMode === 'background') return i18n.t('info.bg.removed');
+    if (isBgMode()) return i18n.t('info.bg.removed');
     return !isConfirmedWatermarkDecision(item) ? i18n.t('info.skipped') : i18n.t('info.removed');
 }
 
 function renderSingleProcessedMeta(item) {
     if (!item?.originalImg) return;
-
-    if (currentMode === 'background') {
+    if (isBgMode()) {
         processedInfo.innerHTML = `
             <p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>
             <p>${i18n.t('info.status')}: ${i18n.t('info.bg.removed')}</p>
         `;
         return;
     }
-
     const watermarkInfo = resolveDisplayWatermarkInfo(item, getEstimatedWatermarkInfo(item));
-    const showWatermarkInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
-
+    const showInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
     processedInfo.innerHTML = `
         <p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>
-        ${showWatermarkInfo ? `<p>${i18n.t('info.watermark')}: ${watermarkInfo.size}×${watermarkInfo.size}</p>` : ''}
-        ${showWatermarkInfo ? `<p>${i18n.t('info.position')}: (${watermarkInfo.position.x},${watermarkInfo.position.y})</p>` : ''}
+        ${showInfo ? `<p>${i18n.t('info.watermark')}: ${watermarkInfo.size}×${watermarkInfo.size}</p>` : ''}
+        ${showInfo ? `<p>${i18n.t('info.position')}: (${watermarkInfo.position.x},${watermarkInfo.position.y})</p>` : ''}
         <p>${i18n.t('info.status')}: ${getProcessedStatusLabel(item)}</p>
     `;
 }
+
+// ── Single image processing ───────────────────────────────────────────────────
 
 async function processSingle(item) {
     try {
         const img = await loadImage(item.file);
         item.originalImg = img;
-
         originalImage.src = img.src;
         renderSingleImageMeta(item);
 
         const processed = await processImage(item);
         item.processedMeta = processed.meta;
-        renderSingleImageMeta(item);
         item.processedBlob = processed.blob;
 
+        renderSingleImageMeta(item);
         item.processedUrl = URL.createObjectURL(processed.blob);
         processedImage.src = item.processedUrl;
-        const overlay = document.getElementById('processedOverlay');
-        const handle = document.getElementById('sliderHandle');
-        overlay.style.display = 'block';
-        handle.style.display = 'flex';
+
+        document.getElementById('processedOverlay').style.display = 'block';
+        document.getElementById('sliderHandle').style.display = 'flex';
         processedInfo.style.display = 'block';
 
         copyBtn.style.display = 'flex';
         copyBtn.onclick = () => copyImage(item);
-
         downloadBtn.style.display = 'flex';
         downloadBtn.onclick = () => downloadImage(item);
 
         renderSingleProcessedMeta(item);
-
         document.getElementById('comparisonContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
         console.error(error);
@@ -381,29 +432,26 @@ async function processSingle(item) {
     }
 }
 
-// ── Multi-image / batch flow ─────────────────────────────────────────────────
+// ── Batch processing ──────────────────────────────────────────────────────────
 
 function renderImageCardStatus(item) {
     if (!item) return;
-
     if (item.status === 'pending') { updateStatus(item.id, i18n.t('status.pending')); return; }
     if (item.status === 'processing') { updateStatus(item.id, i18n.t('status.processing')); return; }
     if (item.status === 'error') { updateStatus(item.id, i18n.t('status.failed')); return; }
     if (item.status !== 'completed' || !item.originalImg) return;
 
-    if (currentMode === 'background') {
+    if (isBgMode()) {
         updateStatus(item.id, `
             <p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>
             <p>${i18n.t('info.status')}: ${i18n.t('info.bg.removed')}</p>
         `, true);
         return;
     }
-
     const watermarkInfo = resolveDisplayWatermarkInfo(item, getEstimatedWatermarkInfo(item));
-    const showWatermarkInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
-
+    const showInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
     let html = `<p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>`;
-    if (showWatermarkInfo) {
+    if (showInfo) {
         html += `<p>${i18n.t('info.watermark')}: ${watermarkInfo.size}×${watermarkInfo.size}</p>
         <p>${i18n.t('info.position')}: (${watermarkInfo.position.x},${watermarkInfo.position.y})</p>`;
     }
@@ -438,11 +486,10 @@ function createImageCard(item) {
         </div>
     `;
     imageList.appendChild(card);
-    const imageName = card.querySelector('.image-name');
-    if (imageName) {
-        const safeImageName = typeof item.name === 'string' ? item.name : '';
-        imageName.textContent = safeImageName;
-        imageName.title = safeImageName;
+    const nameEl = card.querySelector('.image-name');
+    if (nameEl) {
+        nameEl.textContent = String(item.name || '');
+        nameEl.title = nameEl.textContent;
     }
 }
 
@@ -455,33 +502,29 @@ async function processQueue() {
         zoom.attach(`#result-${item.id}`);
     }));
 
-    // bg removal is memory-heavy: process 1 at a time; watermark is fast: 3 at a time
-    const concurrency = currentMode === 'background' ? 1 : 3;
+    // AI bg removal: 1 at a time to avoid OOM; watermark: 3 concurrent
+    const concurrency = isBgMode() ? 1 : 3;
     for (let i = 0; i < imageQueue.length; i += concurrency) {
         await Promise.all(imageQueue.slice(i, i + concurrency).map(async item => {
             if (item.status !== 'pending') return;
-
             item.status = 'processing';
             renderImageCardStatus(item);
-
             try {
                 const processed = await processImage(item);
                 item.processedMeta = processed.meta;
                 item.processedBlob = processed.blob;
-
                 item.processedUrl = URL.createObjectURL(processed.blob);
                 document.getElementById(`result-${item.id}`).src = item.processedUrl;
-
                 item.status = 'completed';
                 renderImageCardStatus(item);
 
-                const copyBtnEl = document.getElementById(`copy-${item.id}`);
-                copyBtnEl.classList.remove('hidden');
-                copyBtnEl.onclick = () => copyImage(item, copyBtnEl);
+                const copyEl = document.getElementById(`copy-${item.id}`);
+                copyEl.classList.remove('hidden');
+                copyEl.onclick = () => copyImage(item, copyEl);
 
-                const downloadBtnEl = document.getElementById(`download-${item.id}`);
-                downloadBtnEl.classList.remove('hidden');
-                downloadBtnEl.onclick = () => downloadImage(item);
+                const dlEl = document.getElementById(`download-${item.id}`);
+                dlEl.classList.remove('hidden');
+                dlEl.onclick = () => downloadImage(item);
 
                 processedCount++;
                 updateProgress();
@@ -492,31 +535,7 @@ async function processQueue() {
             }
         }));
     }
-
-    if (processedCount > 0) {
-        downloadAllBtn.style.display = 'flex';
-    }
-}
-
-// ── Watermark-specific processing ─────────────────────────────────────────────
-
-async function processImageWithBestPath(file, fallbackImage, options = {}) {
-    if (workerClient) {
-        try {
-            return await workerClient.processBlob(file, options);
-        } catch (error) {
-            console.warn('worker process failed, fallback to main thread:', error);
-            disableWorkerClient(error);
-        }
-    }
-
-    const engine = await getEngine();
-    const canvas = await engine.removeWatermarkFromImage(fallbackImage, options);
-    const blob = await canvasToBlob(canvas);
-    return {
-        blob,
-        meta: canvas.__watermarkMeta || null
-    };
+    if (processedCount > 0) downloadAllBtn.style.display = 'flex';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -531,19 +550,20 @@ function updateProgress() {
 }
 
 function updateDynamicTexts() {
-    // Re-render mode subtitle after language switch
+    // Re-translate mode buttons
+    Object.entries(MODE_BTN_IDS).forEach(([mode, id]) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.textContent = i18n.t(`mode.${mode}`);
+    });
+
+    // Re-translate subtitle
     const subtitle = document.getElementById('modeSubtitle');
-    if (subtitle) subtitle.textContent = i18n.t(subtitle.getAttribute('data-i18n') || 'main.subtitle.watermark');
+    if (subtitle) subtitle.textContent = i18n.t(subtitle.getAttribute('data-i18n') || `main.subtitle.${currentMode}`);
 
-    // Re-render mode buttons
-    const modeWatermarkBtn = document.getElementById('modeWatermark');
-    const modeBgBtn = document.getElementById('modeBg');
-    if (modeWatermarkBtn) modeWatermarkBtn.textContent = i18n.t('mode.watermark');
-    if (modeBgBtn) modeBgBtn.textContent = i18n.t('mode.bg');
-
-    if (progressText.textContent || imageQueue.length > 0) updateProgress();
-    if (imageQueue.length > 0) imageQueue.forEach(item => renderImageCardStatus(item));
-
+    if (imageQueue.length > 0) {
+        updateProgress();
+        imageQueue.forEach(item => renderImageCardStatus(item));
+    }
     if (singlePreview.style.display !== 'none' && imageQueue.length === 1) {
         const [item] = imageQueue;
         renderSingleImageMeta(item);
@@ -551,30 +571,31 @@ function updateDynamicTexts() {
     }
 }
 
+function getFilePrefix() {
+    if (currentMode === 'portrait') return 'portrait_nobg_';
+    if (currentMode === 'general') return 'nobg_';
+    return 'unwatermarked_';
+}
+
 async function copyImage(item, targetBtn = copyBtn) {
     if (!navigator.clipboard || !window.ClipboardItem) {
         setStatusMessage(i18n.t('status.unsupported'), 'warn');
         return;
     }
-
     try {
         if (!item.processedBlob) return;
-        const data = [new ClipboardItem({ [item.processedBlob.type]: item.processedBlob })];
-        await navigator.clipboard.write(data);
-
+        await navigator.clipboard.write([new ClipboardItem({ [item.processedBlob.type]: item.processedBlob })]);
         const span = targetBtn.querySelector('span');
         const svg = targetBtn.querySelector('svg');
-        const originalSvgPath = svg?.innerHTML;
-
+        const origSvg = svg?.innerHTML;
         span.textContent = i18n.t('status.copied');
         if (svg) svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
-
         setTimeout(() => {
             span.textContent = i18n.t('btn.copy');
-            if (svg && originalSvgPath) svg.innerHTML = originalSvgPath;
+            if (svg && origSvg) svg.innerHTML = origSvg;
         }, 2000);
     } catch (err) {
-        console.error('Failed to copy image: ', err);
+        console.error('Failed to copy image:', err);
         setStatusMessage(i18n.t('status.copy_failed'), 'warn');
     }
 }
@@ -582,23 +603,16 @@ async function copyImage(item, targetBtn = copyBtn) {
 function downloadImage(item) {
     const a = document.createElement('a');
     a.href = item.processedUrl;
-    const baseName = item.name.replace(/\.[^.]+$/, '');
-    const prefix = currentMode === 'background' ? 'nobg_' : 'unwatermarked_';
-    a.download = `${prefix}${baseName}.png`;
+    a.download = `${getFilePrefix()}${item.name.replace(/\.[^.]+$/, '')}.png`;
     a.click();
 }
 
 async function downloadAll() {
     const completed = imageQueue.filter(item => item.status === 'completed');
-    if (completed.length === 0) return;
-
+    if (!completed.length) return;
     const zip = new JSZip();
-    const prefix = currentMode === 'background' ? 'nobg_' : 'unwatermarked_';
-    completed.forEach(item => {
-        const filename = `${prefix}${item.name.replace(/\.[^.]+$/, '')}.png`;
-        zip.file(filename, item.processedBlob);
-    });
-
+    const prefix = getFilePrefix();
+    completed.forEach(item => zip.file(`${prefix}${item.name.replace(/\.[^.]+$/, '')}.png`, item.processedBlob));
     const blob = await zip.generateAsync({ type: 'blob' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -606,22 +620,17 @@ async function downloadAll() {
     a.click();
 }
 
+// ── UI setup ──────────────────────────────────────────────────────────────────
+
 function setupDarkMode() {
     const themeToggle = document.getElementById('themeToggle');
     const html = document.documentElement;
-
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
         html.classList.add('dark');
     }
-
     themeToggle.addEventListener('click', () => {
-        if (html.classList.contains('dark')) {
-            html.classList.remove('dark');
-            localStorage.theme = 'light';
-        } else {
-            html.classList.add('dark');
-            localStorage.theme = 'dark';
-        }
+        html.classList.toggle('dark');
+        localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
     });
 }
 
@@ -634,21 +643,17 @@ function setupSlider() {
     function move(e) {
         if (!isDown) return;
         const rect = container.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        if (!clientX) return;
-
-        const x = clientX - rect.left;
-        const percent = Math.min(Math.max(x / rect.width, 0), 1) * 100;
-
+        const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+        if (clientX == null) return;
+        const percent = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1) * 100;
         overlay.style.width = `${percent}%`;
         handle.style.left = `${percent}%`;
     }
 
-    container.addEventListener('mousedown', (e) => { isDown = true; move(e); });
+    container.addEventListener('mousedown', e => { isDown = true; move(e); });
     window.addEventListener('mouseup', () => { isDown = false; });
     window.addEventListener('mousemove', move);
-
-    container.addEventListener('touchstart', (e) => { isDown = true; move(e); });
+    container.addEventListener('touchstart', e => { isDown = true; move(e); });
     window.addEventListener('touchend', () => { isDown = false; });
     window.addEventListener('touchmove', move);
 }

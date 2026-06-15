@@ -4,10 +4,12 @@
   "nav.userscript": "Install Userscript for Gemini",
   "nav.principle": "How It Works?",
   "mode.watermark": "Remove Watermark",
-  "mode.bg": "Remove Background",
+  "mode.portrait": "Portrait BG",
+  "mode.general": "General BG",
   "main.title": "Gemini AI Watermark Removal",
   "main.subtitle.watermark": "Based on reverse alpha blending algorithm, pure browser-side processing, Free, Fast, and Lossless",
-  "main.subtitle.bg": "AI-powered background removal — runs entirely in your browser, no data uploaded",
+  "main.subtitle.portrait": "MediaPipe AI — optimized for people & selfies, fast and precise hair/edge detection",
+  "main.subtitle.general": "ISNet AI — general-purpose background removal for objects, products and scenes",
   "upload.text": "Click to select or drag images here",
   "upload.hint": "Supports JPG, PNG, WebP",
   "step.1": "Select Original Image",
@@ -52,5 +54,7 @@
   "info.skipped": "No removable watermark detected; original kept",
   "info.bg.removed": "Background Removed",
   "bg.status.loading_model": "Downloading AI model",
-  "bg.status.processing": "Removing background"
+  "bg.status.processing": "Removing background",
+  "portrait.status.loading_model": "Loading portrait AI model",
+  "portrait.status.processing": "Segmenting portrait"
 }

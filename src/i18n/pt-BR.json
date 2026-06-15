@@ -4,10 +4,12 @@
 	"nav.userscript": "Instalar script de usuário para Gemini",
 	"nav.principle": "Como Funciona?",
 	"mode.watermark": "Remover Marca d'água",
-	"mode.bg": "Remover Fundo",
+	"mode.portrait": "Fundo (Retrato)",
+	"mode.general": "Fundo (Geral)",
 	"main.title": "Remoção de marca d'água da IA Gemini",
 	"main.subtitle.watermark": "Baseado em algoritmo de mistura alfa reversa, processamento totalmente no navegador, gratuito, rápido e sem perdas.",
-	"main.subtitle.bg": "Remoção de fundo com IA — processamento 100% no navegador, sem upload de dados",
+	"main.subtitle.portrait": "IA MediaPipe — otimizado para pessoas e selfies, detecção precisa de cabelo e bordas",
+	"main.subtitle.general": "IA ISNet — remoção de fundo para objetos, produtos e cenas diversas",
 	"upload.text": "Clique para selecionar ou arraste as imagens para cá.",
 	"upload.hint": "Suporta JPG, PNG, WebP",
 	"step.1": "Selecione a imagem original",
@@ -52,5 +54,7 @@
 	"info.skipped": "Nenhuma marca d'água removível detectada; imagem original mantida",
 	"info.bg.removed": "Fundo Removido",
 	"bg.status.loading_model": "Baixando modelo de IA",
-	"bg.status.processing": "Removendo fundo"
+	"bg.status.processing": "Removendo fundo",
+	"portrait.status.loading_model": "Carregando modelo de retrato",
+	"portrait.status.processing": "Segmentando retrato"
 }

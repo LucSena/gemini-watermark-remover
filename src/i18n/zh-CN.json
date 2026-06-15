@@ -4,10 +4,12 @@
   "nav.userscript": "安装油猴脚本",
   "nav.principle": "去水印原理",
   "mode.watermark": "去水印",
-  "mode.bg": "去背景",
+  "mode.portrait": "人像去背",
+  "mode.general": "通用去背",
   "main.title": "Gemini AI 图像去水印",
   "main.subtitle.watermark": "基于反向 Alpha 混合算法，纯浏览器本地处理，免费、极速、无损",
-  "main.subtitle.bg": "AI 驱动的背景去除，完全在浏览器中运行，无需上传数据",
+  "main.subtitle.portrait": "MediaPipe AI — 专为人像/自拍优化，发丝边缘检测精准",
+  "main.subtitle.general": "ISNet AI — 通用背景去除，适合物体、产品和场景",
   "upload.text": "点击选择 或 拖拽图片至此",
   "upload.hint": "支持 JPG, PNG, WebP",
   "step.1": "选择原始图片",
@@ -52,5 +54,7 @@
   "info.skipped": "未检测到可移除水印，已保留原图",
   "info.bg.removed": "背景已去除",
   "bg.status.loading_model": "正在下载 AI 模型",
-  "bg.status.processing": "正在去除背景"
+  "bg.status.processing": "正在去除背景",
+  "portrait.status.loading_model": "正在加载人像模型",
+  "portrait.status.processing": "正在分割人像"
 }
