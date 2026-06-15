@@ -18,6 +18,7 @@ import {
 } from './utils.js';
 import JSZip from 'jszip';
 import mediumZoom from 'medium-zoom';
+import { removeBackground } from '@imgly/background-removal';
 
 // global state
 let enginePromise = null;
@@ -25,6 +26,7 @@ let workerClient = null;
 let imageQueue = [];
 let processedCount = 0;
 let zoom = null;
+let currentMode = 'watermark'; // 'watermark' | 'background'
 
 // dom elements references
 const uploadArea = document.getElementById('uploadArea');
@@ -71,14 +73,83 @@ function disableWorkerClient(reason) {
     workerClient = null;
 }
 
-/**
- * initialize the application
- */
+// ── Mode switching ──────────────────────────────────────────────────────────
+
+function setupModeSwitcher() {
+    const modeWatermarkBtn = document.getElementById('modeWatermark');
+    const modeBgBtn = document.getElementById('modeBg');
+
+    if (modeWatermarkBtn) modeWatermarkBtn.addEventListener('click', () => setMode('watermark'));
+    if (modeBgBtn) modeBgBtn.addEventListener('click', () => setMode('background'));
+}
+
+function setMode(mode) {
+    currentMode = mode;
+
+    const modeWatermarkBtn = document.getElementById('modeWatermark');
+    const modeBgBtn = document.getElementById('modeBg');
+    const subtitle = document.getElementById('modeSubtitle');
+
+    const activeClass = 'px-5 py-2 rounded-lg text-sm font-semibold transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow';
+    const inactiveClass = 'px-5 py-2 rounded-lg text-sm font-semibold transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200';
+
+    if (mode === 'watermark') {
+        if (modeWatermarkBtn) modeWatermarkBtn.className = activeClass;
+        if (modeBgBtn) modeBgBtn.className = inactiveClass;
+        if (subtitle) {
+            subtitle.setAttribute('data-i18n', 'main.subtitle.watermark');
+            subtitle.textContent = i18n.t('main.subtitle.watermark');
+        }
+    } else {
+        if (modeBgBtn) modeBgBtn.className = activeClass;
+        if (modeWatermarkBtn) modeWatermarkBtn.className = inactiveClass;
+        if (subtitle) {
+            subtitle.setAttribute('data-i18n', 'main.subtitle.bg');
+            subtitle.textContent = i18n.t('main.subtitle.bg');
+        }
+    }
+
+    reset();
+}
+
+// ── Background removal ──────────────────────────────────────────────────────
+
+async function processBackgroundRemoval(item) {
+    let lastKey = '';
+    const blob = await removeBackground(item.file, {
+        progress: (key, current, total) => {
+            if (total <= 0) return;
+            const label = key !== lastKey ? i18n.t('bg.status.loading_model') : i18n.t('bg.status.processing');
+            lastKey = key;
+            const pct = Math.round((current / total) * 100);
+            setStatusMessage(`${label}: ${pct}%`);
+        },
+        output: {
+            format: 'image/png',
+            quality: 1,
+        },
+    });
+    setStatusMessage('');
+    return { blob, meta: { applied: true, decisionTier: 'confirmed' } };
+}
+
+// ── Unified processing ──────────────────────────────────────────────────────
+
+async function processImage(item) {
+    if (currentMode === 'background') {
+        return await processBackgroundRemoval(item);
+    }
+    return await processImageWithBestPath(item.file, item.originalImg);
+}
+
+// ── init ─────────────────────────────────────────────────────────────────────
+
 async function init() {
     try {
         await i18n.init();
         setupLanguageSwitch();
         setupDarkMode();
+        setupModeSwitcher();
         showLoading(i18n.t('status.loading'));
 
         if (canUseWatermarkWorker()) {
@@ -105,16 +176,13 @@ async function init() {
             margin: 24,
             scrollOffset: 0,
             background: 'rgba(255, 255, 255, .6)',
-        })
+        });
     } catch (error) {
         hideLoading();
         console.error('initialize error:', error);
     }
 }
 
-/**
- * setup language switch
- */
 function setupLanguageSwitch() {
     const select = document.getElementById('langSwitch');
     if (!select) return;
@@ -128,14 +196,10 @@ function setupLanguageSwitch() {
     });
 }
 
-/**
- * setup event listeners
- */
 function setupEventListeners() {
     uploadArea.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleFileSelect);
 
-    // Global drag & drop
     document.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('border-primary', 'bg-emerald-50', 'dark:bg-gray-700/50');
@@ -155,7 +219,6 @@ function setupEventListeners() {
         }
     });
 
-    // Paste support
     document.addEventListener('paste', (e) => {
         const items = e.clipboardData.items;
         const files = [];
@@ -235,13 +298,17 @@ function handleFiles(files) {
     }
 }
 
+// ── Single image flow ────────────────────────────────────────────────────────
+
 function renderSingleImageMeta(item) {
     if (!item?.originalImg) return;
 
-    const watermarkInfo = resolveDisplayWatermarkInfo(
-        item,
-        getEstimatedWatermarkInfo(item)
-    );
+    if (currentMode === 'background') {
+        originalInfo.innerHTML = `<p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>`;
+        return;
+    }
+
+    const watermarkInfo = resolveDisplayWatermarkInfo(item, getEstimatedWatermarkInfo(item));
     if (!watermarkInfo) return;
 
     originalInfo.innerHTML = `
@@ -252,18 +319,22 @@ function renderSingleImageMeta(item) {
 }
 
 function getProcessedStatusLabel(item) {
-    return !isConfirmedWatermarkDecision(item)
-        ? i18n.t('info.skipped')
-        : i18n.t('info.removed');
+    if (currentMode === 'background') return i18n.t('info.bg.removed');
+    return !isConfirmedWatermarkDecision(item) ? i18n.t('info.skipped') : i18n.t('info.removed');
 }
 
 function renderSingleProcessedMeta(item) {
     if (!item?.originalImg) return;
 
-    const watermarkInfo = resolveDisplayWatermarkInfo(
-        item,
-        getEstimatedWatermarkInfo(item)
-    );
+    if (currentMode === 'background') {
+        processedInfo.innerHTML = `
+            <p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>
+            <p>${i18n.t('info.status')}: ${i18n.t('info.bg.removed')}</p>
+        `;
+        return;
+    }
+
+    const watermarkInfo = resolveDisplayWatermarkInfo(item, getEstimatedWatermarkInfo(item));
     const showWatermarkInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
 
     processedInfo.innerHTML = `
@@ -274,42 +345,6 @@ function renderSingleProcessedMeta(item) {
     `;
 }
 
-function renderImageCardStatus(item) {
-    if (!item) return;
-
-    if (item.status === 'pending') {
-        updateStatus(item.id, i18n.t('status.pending'));
-        return;
-    }
-
-    if (item.status === 'processing') {
-        updateStatus(item.id, i18n.t('status.processing'));
-        return;
-    }
-
-    if (item.status === 'error') {
-        updateStatus(item.id, i18n.t('status.failed'));
-        return;
-    }
-
-    if (item.status !== 'completed' || !item.originalImg) return;
-
-    const watermarkInfo = resolveDisplayWatermarkInfo(
-        item,
-        getEstimatedWatermarkInfo(item)
-    );
-    const showWatermarkInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
-
-    let html = `<p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>`;
-    if (showWatermarkInfo) {
-        html += `<p>${i18n.t('info.watermark')}: ${watermarkInfo.size}×${watermarkInfo.size}</p>
-        <p>${i18n.t('info.position')}: (${watermarkInfo.position.x},${watermarkInfo.position.y})</p>`;
-    }
-    html += `<p>${i18n.t('info.status')}: ${getProcessedStatusLabel(item)}</p>`;
-
-    updateStatus(item.id, html, true);
-}
-
 async function processSingle(item) {
     try {
         const img = await loadImage(item.file);
@@ -318,7 +353,7 @@ async function processSingle(item) {
         originalImage.src = img.src;
         renderSingleImageMeta(item);
 
-        const processed = await processImageWithBestPath(item.file, img);
+        const processed = await processImage(item);
         item.processedMeta = processed.meta;
         renderSingleImageMeta(item);
         item.processedBlob = processed.blob;
@@ -342,7 +377,38 @@ async function processSingle(item) {
         document.getElementById('comparisonContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
         console.error(error);
+        setStatusMessage(i18n.t('status.failed'), 'warn');
     }
+}
+
+// ── Multi-image / batch flow ─────────────────────────────────────────────────
+
+function renderImageCardStatus(item) {
+    if (!item) return;
+
+    if (item.status === 'pending') { updateStatus(item.id, i18n.t('status.pending')); return; }
+    if (item.status === 'processing') { updateStatus(item.id, i18n.t('status.processing')); return; }
+    if (item.status === 'error') { updateStatus(item.id, i18n.t('status.failed')); return; }
+    if (item.status !== 'completed' || !item.originalImg) return;
+
+    if (currentMode === 'background') {
+        updateStatus(item.id, `
+            <p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>
+            <p>${i18n.t('info.status')}: ${i18n.t('info.bg.removed')}</p>
+        `, true);
+        return;
+    }
+
+    const watermarkInfo = resolveDisplayWatermarkInfo(item, getEstimatedWatermarkInfo(item));
+    const showWatermarkInfo = watermarkInfo && isConfirmedWatermarkDecision(item);
+
+    let html = `<p>${i18n.t('info.size')}: ${item.originalImg.width}×${item.originalImg.height}</p>`;
+    if (showWatermarkInfo) {
+        html += `<p>${i18n.t('info.watermark')}: ${watermarkInfo.size}×${watermarkInfo.size}</p>
+        <p>${i18n.t('info.position')}: (${watermarkInfo.position.x},${watermarkInfo.position.y})</p>`;
+    }
+    html += `<p>${i18n.t('info.status')}: ${getProcessedStatusLabel(item)}</p>`;
+    updateStatus(item.id, html, true);
 }
 
 function createImageCard(item) {
@@ -389,7 +455,8 @@ async function processQueue() {
         zoom.attach(`#result-${item.id}`);
     }));
 
-    const concurrency = 3;
+    // bg removal is memory-heavy: process 1 at a time; watermark is fast: 3 at a time
+    const concurrency = currentMode === 'background' ? 1 : 3;
     for (let i = 0; i < imageQueue.length; i += concurrency) {
         await Promise.all(imageQueue.slice(i, i + concurrency).map(async item => {
             if (item.status !== 'pending') return;
@@ -398,7 +465,7 @@ async function processQueue() {
             renderImageCardStatus(item);
 
             try {
-                const processed = await processImageWithBestPath(item.file, item.originalImg);
+                const processed = await processImage(item);
                 item.processedMeta = processed.meta;
                 item.processedBlob = processed.blob;
 
@@ -408,13 +475,13 @@ async function processQueue() {
                 item.status = 'completed';
                 renderImageCardStatus(item);
 
-                const copyBtn = document.getElementById(`copy-${item.id}`);
-                copyBtn.classList.remove('hidden');
-                copyBtn.onclick = () => copyImage(item, copyBtn);
+                const copyBtnEl = document.getElementById(`copy-${item.id}`);
+                copyBtnEl.classList.remove('hidden');
+                copyBtnEl.onclick = () => copyImage(item, copyBtnEl);
 
-                const downloadBtn = document.getElementById(`download-${item.id}`);
-                downloadBtn.classList.remove('hidden');
-                downloadBtn.onclick = () => downloadImage(item);
+                const downloadBtnEl = document.getElementById(`download-${item.id}`);
+                downloadBtnEl.classList.remove('hidden');
+                downloadBtnEl.onclick = () => downloadImage(item);
 
                 processedCount++;
                 updateProgress();
@@ -430,6 +497,8 @@ async function processQueue() {
         downloadAllBtn.style.display = 'flex';
     }
 }
+
+// ── Watermark-specific processing ─────────────────────────────────────────────
 
 async function processImageWithBestPath(file, fallbackImage, options = {}) {
     if (workerClient) {
@@ -450,6 +519,8 @@ async function processImageWithBestPath(file, fallbackImage, options = {}) {
     };
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function updateStatus(id, text, isHtml = false) {
     const el = document.getElementById(`status-${id}`);
     if (el) el.innerHTML = isHtml ? text : text.replace(/\n/g, '<br>');
@@ -460,21 +531,23 @@ function updateProgress() {
 }
 
 function updateDynamicTexts() {
-    if (progressText.textContent || imageQueue.length > 0) {
-        updateProgress();
-    }
+    // Re-render mode subtitle after language switch
+    const subtitle = document.getElementById('modeSubtitle');
+    if (subtitle) subtitle.textContent = i18n.t(subtitle.getAttribute('data-i18n') || 'main.subtitle.watermark');
 
-    if (imageQueue.length > 0) {
-        imageQueue.forEach(item => renderImageCardStatus(item));
-    }
+    // Re-render mode buttons
+    const modeWatermarkBtn = document.getElementById('modeWatermark');
+    const modeBgBtn = document.getElementById('modeBg');
+    if (modeWatermarkBtn) modeWatermarkBtn.textContent = i18n.t('mode.watermark');
+    if (modeBgBtn) modeBgBtn.textContent = i18n.t('mode.bg');
+
+    if (progressText.textContent || imageQueue.length > 0) updateProgress();
+    if (imageQueue.length > 0) imageQueue.forEach(item => renderImageCardStatus(item));
 
     if (singlePreview.style.display !== 'none' && imageQueue.length === 1) {
         const [item] = imageQueue;
         renderSingleImageMeta(item);
-
-        if (item?.processedBlob) {
-            renderSingleProcessedMeta(item);
-        }
+        if (item?.processedBlob) renderSingleProcessedMeta(item);
     }
 }
 
@@ -491,16 +564,14 @@ async function copyImage(item, targetBtn = copyBtn) {
 
         const span = targetBtn.querySelector('span');
         const svg = targetBtn.querySelector('svg');
-        const originalText = span.textContent;
-        const originalSvgPath = svg.innerHTML;
+        const originalSvgPath = svg?.innerHTML;
 
         span.textContent = i18n.t('status.copied');
-        svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
+        if (svg) svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>';
 
         setTimeout(() => {
-            // Restore using i18n to handle potential language switch during timeout
             span.textContent = i18n.t('btn.copy');
-            svg.innerHTML = originalSvgPath;
+            if (svg && originalSvgPath) svg.innerHTML = originalSvgPath;
         }, 2000);
     } catch (err) {
         console.error('Failed to copy image: ', err);
@@ -511,7 +582,9 @@ async function copyImage(item, targetBtn = copyBtn) {
 function downloadImage(item) {
     const a = document.createElement('a');
     a.href = item.processedUrl;
-    a.download = `unwatermarked_${item.name.replace(/\.[^.]+$/, '')}.png`;
+    const baseName = item.name.replace(/\.[^.]+$/, '');
+    const prefix = currentMode === 'background' ? 'nobg_' : 'unwatermarked_';
+    a.download = `${prefix}${baseName}.png`;
     a.click();
 }
 
@@ -520,15 +593,16 @@ async function downloadAll() {
     if (completed.length === 0) return;
 
     const zip = new JSZip();
+    const prefix = currentMode === 'background' ? 'nobg_' : 'unwatermarked_';
     completed.forEach(item => {
-        const filename = `unwatermarked_${item.name.replace(/\.[^.]+$/, '')}.png`;
+        const filename = `${prefix}${item.name.replace(/\.[^.]+$/, '')}.png`;
         zip.file(filename, item.processedBlob);
     });
 
     const blob = await zip.generateAsync({ type: 'blob' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `unwatermarked_${Date.now()}.zip`;
+    a.download = `${prefix}${Date.now()}.zip`;
     a.click();
 }
 

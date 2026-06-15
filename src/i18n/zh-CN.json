@@ -3,8 +3,11 @@
   "header.title": "Gemini Watermark Remover",
   "nav.userscript": "安装油猴脚本",
   "nav.principle": "去水印原理",
+  "mode.watermark": "去水印",
+  "mode.bg": "去背景",
   "main.title": "Gemini AI 图像去水印",
-  "main.subtitle": "基于反向 Alpha 混合算法，纯浏览器本地处理，免费、极速、无损",
+  "main.subtitle.watermark": "基于反向 Alpha 混合算法，纯浏览器本地处理，免费、极速、无损",
+  "main.subtitle.bg": "AI 驱动的背景去除，完全在浏览器中运行，无需上传数据",
   "upload.text": "点击选择 或 拖拽图片至此",
   "upload.hint": "支持 JPG, PNG, WebP",
   "step.1": "选择原始图片",
@@ -46,5 +49,8 @@
   "info.position": "位置",
   "info.status": "状态",
   "info.removed": "水印已移除",
-  "info.skipped": "未检测到可移除水印，已保留原图"
+  "info.skipped": "未检测到可移除水印，已保留原图",
+  "info.bg.removed": "背景已去除",
+  "bg.status.loading_model": "正在下载 AI 模型",
+  "bg.status.processing": "正在去除背景"
 }

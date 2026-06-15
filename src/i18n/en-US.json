@@ -3,8 +3,11 @@
   "header.title": "Gemini Watermark Remover",
   "nav.userscript": "Install Userscript for Gemini",
   "nav.principle": "How It Works?",
+  "mode.watermark": "Remove Watermark",
+  "mode.bg": "Remove Background",
   "main.title": "Gemini AI Watermark Removal",
-  "main.subtitle": "Based on reverse alpha blending algorithm, pure browser-side processing, Free, Fast, and Lossless",
+  "main.subtitle.watermark": "Based on reverse alpha blending algorithm, pure browser-side processing, Free, Fast, and Lossless",
+  "main.subtitle.bg": "AI-powered background removal — runs entirely in your browser, no data uploaded",
   "upload.text": "Click to select or drag images here",
   "upload.hint": "Supports JPG, PNG, WebP",
   "step.1": "Select Original Image",
@@ -46,5 +49,8 @@
   "info.position": "Position",
   "info.status": "Status",
   "info.removed": "Watermark Removed",
-  "info.skipped": "No removable watermark detected; original kept"
+  "info.skipped": "No removable watermark detected; original kept",
+  "info.bg.removed": "Background Removed",
+  "bg.status.loading_model": "Downloading AI model",
+  "bg.status.processing": "Removing background"
 }

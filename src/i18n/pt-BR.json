@@ -3,8 +3,11 @@
 	"header.title": "Gemini Watermark Remover",
 	"nav.userscript": "Instalar script de usuário para Gemini",
 	"nav.principle": "Como Funciona?",
+	"mode.watermark": "Remover Marca d'água",
+	"mode.bg": "Remover Fundo",
 	"main.title": "Remoção de marca d'água da IA Gemini",
-	"main.subtitle": "Baseado em algoritmo de mistura alfa reversa, processamento totalmente no navegador, gratuito, rápido e sem perdas.",
+	"main.subtitle.watermark": "Baseado em algoritmo de mistura alfa reversa, processamento totalmente no navegador, gratuito, rápido e sem perdas.",
+	"main.subtitle.bg": "Remoção de fundo com IA — processamento 100% no navegador, sem upload de dados",
 	"upload.text": "Clique para selecionar ou arraste as imagens para cá.",
 	"upload.hint": "Suporta JPG, PNG, WebP",
 	"step.1": "Selecione a imagem original",
@@ -46,5 +49,8 @@
 	"info.position": "Posição",
 	"info.status": "Status",
 	"info.removed": "Marca d'água removida",
-	"info.skipped": "Nenhuma marca d'água removível detectada; imagem original mantida"
+	"info.skipped": "Nenhuma marca d'água removível detectada; imagem original mantida",
+	"info.bg.removed": "Fundo Removido",
+	"bg.status.loading_model": "Baixando modelo de IA",
+	"bg.status.processing": "Removendo fundo"
 }
