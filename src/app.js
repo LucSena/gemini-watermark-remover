@@ -30,6 +30,8 @@ let processedCount = 0;
 let zoom = null;
 // 'watermark' | 'portrait' | 'general'
 let currentMode = 'watermark';
+// 'auto' | 'manual' — only meaningful while currentMode === 'watermark'
+let currentSubMode = 'auto';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,22 @@ const processedInfo = document.getElementById('processedInfo');
 const downloadBtn = document.getElementById('downloadBtn');
 const copyBtn = document.getElementById('copyBtn');
 const resetBtn = document.getElementById('resetBtn');
+
+const watermarkSubModeToggle = document.getElementById('watermarkSubModeToggle');
+const manualEditor = document.getElementById('manualEditor');
+const manualCanvas = document.getElementById('manualCanvas');
+const manualCanvasWrap = document.getElementById('manualCanvasWrap');
+const manualSelectionBox = document.getElementById('manualSelectionBox');
+const manualApplyBtn = document.getElementById('manualApplyBtn');
+const manualUndoBtn = document.getElementById('manualUndoBtn');
+const manualCopyBtn = document.getElementById('manualCopyBtn');
+const manualDownloadBtn = document.getElementById('manualDownloadBtn');
+const manualResetBtn = document.getElementById('manualResetBtn');
+const manualStatusMessage = document.getElementById('manualStatusMessage');
+
+let manualCurrentItem = null;
+let manualSelection = null;
+let manualUndoStack = [];
 
 // ── Watermark engine ──────────────────────────────────────────────────────────
 
@@ -180,6 +198,231 @@ async function processGeneralBgRemoval(item) {
     return { blob, meta: { applied: true, decisionTier: 'confirmed' } };
 }
 
+// ── Manual watermark removal — border-seeded diffusion inpainting ────────────
+//
+// No model, no dependency: seeds the selected region with the average color
+// of its border, then relaxes it with Gauss-Seidel 4-neighbor averaging
+// (a discrete Laplace solve) fixed at the region boundary. Works well for
+// logo-shaped watermarks over plain or gently varying backgrounds; results
+// get blurrier as the selection grows or the background gets busier.
+
+function inpaintCanvasRegion(canvas, rect) {
+    const ctx = canvas.getContext('2d');
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const x0 = Math.max(0, Math.floor(rect.x0));
+    const y0 = Math.max(0, Math.floor(rect.y0));
+    const x1 = Math.min(cw, Math.ceil(rect.x1));
+    const y1 = Math.min(ch, Math.ceil(rect.y1));
+    const w = x1 - x0;
+    const h = y1 - y0;
+    if (w <= 0 || h <= 0) return;
+
+    const imageData = ctx.getImageData(0, 0, cw, ch);
+    const data = imageData.data;
+    const idx = (px, py) => (py * cw + px) * 4;
+
+    let sumR = 0, sumG = 0, sumB = 0, count = 0;
+    const sampleBorder = (px, py) => {
+        const cx = Math.min(Math.max(px, 0), cw - 1);
+        const cy = Math.min(Math.max(py, 0), ch - 1);
+        const i = idx(cx, cy);
+        sumR += data[i]; sumG += data[i + 1]; sumB += data[i + 2];
+        count++;
+    };
+    for (let px = x0; px < x1; px++) { sampleBorder(px, y0 - 1); sampleBorder(px, y1); }
+    for (let py = y0; py < y1; py++) { sampleBorder(x0 - 1, py); sampleBorder(x1, py); }
+    const avgR = count ? sumR / count : 128;
+    const avgG = count ? sumG / count : 128;
+    const avgB = count ? sumB / count : 128;
+
+    const buf = new Float32Array(w * h * 3);
+    for (let i = 0; i < w * h; i++) {
+        buf[i * 3] = avgR; buf[i * 3 + 1] = avgG; buf[i * 3 + 2] = avgB;
+    }
+
+    const sample = (px, py, c) => {
+        if (px >= x0 && px < x1 && py >= y0 && py < y1) {
+            return buf[((py - y0) * w + (px - x0)) * 3 + c];
+        }
+        const cx = Math.min(Math.max(px, 0), cw - 1);
+        const cy = Math.min(Math.max(py, 0), ch - 1);
+        return data[idx(cx, cy) + c];
+    };
+
+    const area = w * h;
+    const iterations = area > 200000 ? 80 : area > 50000 ? 150 : 250;
+
+    for (let iter = 0; iter < iterations; iter++) {
+        for (let ly = 0; ly < h; ly++) {
+            const py = y0 + ly;
+            for (let lx = 0; lx < w; lx++) {
+                const px = x0 + lx;
+                const li = (ly * w + lx) * 3;
+                for (let c = 0; c < 3; c++) {
+                    buf[li + c] = (
+                        sample(px, py - 1, c) +
+                        sample(px, py + 1, c) +
+                        sample(px - 1, py, c) +
+                        sample(px + 1, py, c)
+                    ) / 4;
+                }
+            }
+        }
+    }
+
+    for (let ly = 0; ly < h; ly++) {
+        for (let lx = 0; lx < w; lx++) {
+            const px = x0 + lx, py = y0 + ly;
+            const i = idx(px, py);
+            const li = (ly * w + lx) * 3;
+            data[i] = Math.round(buf[li]);
+            data[i + 1] = Math.round(buf[li + 1]);
+            data[i + 2] = Math.round(buf[li + 2]);
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+}
+
+function setManualStatus(text) {
+    if (manualStatusMessage) manualStatusMessage.textContent = text || '';
+}
+
+function finalizeManualResult() {
+    if (!manualCurrentItem) return;
+    manualCanvas.toBlob((blob) => {
+        if (!blob) return;
+        if (manualCurrentItem.processedUrl) URL.revokeObjectURL(manualCurrentItem.processedUrl);
+        manualCurrentItem.processedBlob = blob;
+        manualCurrentItem.processedUrl = URL.createObjectURL(blob);
+        manualCopyBtn.style.display = 'flex';
+        manualCopyBtn.onclick = () => copyImage(manualCurrentItem, manualCopyBtn);
+        manualDownloadBtn.style.display = 'flex';
+        manualDownloadBtn.onclick = () => downloadImage(manualCurrentItem);
+    }, 'image/png');
+}
+
+async function startManualEditor(item) {
+    try {
+        const img = await loadImage(item.file);
+        item.originalImg = img;
+
+        manualCurrentItem = item;
+        manualSelection = null;
+        manualUndoStack = [];
+        manualSelectionBox.style.display = 'none';
+        manualApplyBtn.disabled = true;
+        manualUndoBtn.style.display = 'none';
+        manualCopyBtn.style.display = 'none';
+        manualDownloadBtn.style.display = 'none';
+        setManualStatus('');
+
+        manualCanvas.width = img.naturalWidth;
+        manualCanvas.height = img.naturalHeight;
+        manualCanvas.getContext('2d').drawImage(img, 0, 0);
+
+        manualEditor.style.display = 'block';
+        manualEditor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+        console.error(error);
+        setStatusMessage(i18n.t('status.failed'), 'warn');
+    }
+}
+
+function setupManualSelection() {
+    let dragging = false;
+    let startPt = null;
+
+    function pointFromEvent(e) {
+        const clientX = e.touches?.[0]?.clientX ?? e.clientX;
+        const clientY = e.touches?.[0]?.clientY ?? e.clientY;
+        const rect = manualCanvas.getBoundingClientRect();
+        const scaleX = manualCanvas.width / rect.width;
+        const scaleY = manualCanvas.height / rect.height;
+        return {
+            x: Math.min(Math.max(Math.round((clientX - rect.left) * scaleX), 0), manualCanvas.width),
+            y: Math.min(Math.max(Math.round((clientY - rect.top) * scaleY), 0), manualCanvas.height),
+        };
+    }
+
+    function drawBoxFromPoints(p1, p2) {
+        const x0 = Math.min(p1.x, p2.x), x1 = Math.max(p1.x, p2.x);
+        const y0 = Math.min(p1.y, p2.y), y1 = Math.max(p1.y, p2.y);
+        const rect = manualCanvas.getBoundingClientRect();
+        const scaleXDisp = rect.width / manualCanvas.width;
+        const scaleYDisp = rect.height / manualCanvas.height;
+        manualSelectionBox.style.left = `${x0 * scaleXDisp}px`;
+        manualSelectionBox.style.top = `${y0 * scaleYDisp}px`;
+        manualSelectionBox.style.width = `${(x1 - x0) * scaleXDisp}px`;
+        manualSelectionBox.style.height = `${(y1 - y0) * scaleYDisp}px`;
+        manualSelectionBox.style.display = 'block';
+        return { x0, y0, x1, y1 };
+    }
+
+    function start(e) {
+        if (!manualCurrentItem) return;
+        e.preventDefault();
+        dragging = true;
+        startPt = pointFromEvent(e);
+        manualSelection = null;
+        manualApplyBtn.disabled = true;
+    }
+    function move(e) {
+        if (!dragging) return;
+        e.preventDefault();
+        drawBoxFromPoints(startPt, pointFromEvent(e));
+    }
+    function end(e) {
+        if (!dragging) return;
+        dragging = false;
+        const pt = pointFromEvent(e.changedTouches?.[0] ?? e);
+        const rect = drawBoxFromPoints(startPt, pt);
+        if (rect.x1 - rect.x0 < 4 || rect.y1 - rect.y0 < 4) {
+            manualSelection = null;
+            manualSelectionBox.style.display = 'none';
+            manualApplyBtn.disabled = true;
+            return;
+        }
+        manualSelection = rect;
+        manualApplyBtn.disabled = false;
+    }
+
+    manualCanvasWrap.addEventListener('mousedown', start);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    manualCanvasWrap.addEventListener('touchstart', start, { passive: false });
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+
+    manualApplyBtn.addEventListener('click', () => {
+        if (!manualSelection || !manualCurrentItem) return;
+        const ctx = manualCanvas.getContext('2d');
+        manualUndoStack.push(ctx.getImageData(0, 0, manualCanvas.width, manualCanvas.height));
+        setManualStatus(i18n.t('manual.status.processing'));
+        manualApplyBtn.disabled = true;
+        setTimeout(() => {
+            inpaintCanvasRegion(manualCanvas, manualSelection);
+            manualSelection = null;
+            manualSelectionBox.style.display = 'none';
+            manualUndoBtn.style.display = 'flex';
+            finalizeManualResult();
+            setManualStatus(i18n.t('manual.status.applied'));
+        }, 10);
+    });
+
+    manualUndoBtn.addEventListener('click', () => {
+        if (!manualUndoStack.length) return;
+        const snapshot = manualUndoStack.pop();
+        manualCanvas.getContext('2d').putImageData(snapshot, 0, 0);
+        if (!manualUndoStack.length) manualUndoBtn.style.display = 'none';
+        finalizeManualResult();
+        setManualStatus('');
+    });
+
+    manualResetBtn.addEventListener('click', reset);
+}
+
 // ── Unified dispatch ──────────────────────────────────────────────────────────
 
 async function processImage(item) {
@@ -199,10 +442,35 @@ const MODE_BTN_IDS = {
     general: 'modeGeneral',
 };
 
+const SUBMODE_ACTIVE = 'px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm';
+const SUBMODE_INACTIVE = 'px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200';
+
+const SUBMODE_BTN_IDS = {
+    auto: 'subAuto',
+    manual: 'subManual',
+};
+
 function setupModeSwitcher() {
     Object.entries(MODE_BTN_IDS).forEach(([mode, id]) => {
         document.getElementById(id)?.addEventListener('click', () => setMode(mode));
     });
+    Object.entries(SUBMODE_BTN_IDS).forEach(([sub, id]) => {
+        document.getElementById(id)?.addEventListener('click', () => setSubMode(sub));
+    });
+    setupManualSelection();
+}
+
+function applySubModeStyles(sub) {
+    Object.entries(SUBMODE_BTN_IDS).forEach(([s, id]) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.className = s === sub ? SUBMODE_ACTIVE : SUBMODE_INACTIVE;
+    });
+}
+
+function setSubMode(sub) {
+    currentSubMode = sub;
+    applySubModeStyles(sub);
+    reset();
 }
 
 function setMode(mode) {
@@ -220,6 +488,13 @@ function setMode(mode) {
         const key = `main.subtitle.${mode}`;
         subtitle.setAttribute('data-i18n', key);
         subtitle.textContent = i18n.t(key);
+    }
+
+    // Sub-mode toggle (Auto/Manual) only applies to watermark mode
+    if (watermarkSubModeToggle) watermarkSubModeToggle.style.display = mode === 'watermark' ? 'flex' : 'none';
+    if (mode !== 'watermark' && currentSubMode !== 'auto') {
+        currentSubMode = 'auto';
+        applySubModeStyles('auto');
     }
 
     reset();
@@ -312,6 +587,16 @@ function setupEventListeners() {
 function reset() {
     singlePreview.style.display = 'none';
     multiPreview.style.display = 'none';
+    manualEditor.style.display = 'none';
+    manualCurrentItem = null;
+    manualSelection = null;
+    manualUndoStack = [];
+    manualSelectionBox.style.display = 'none';
+    manualApplyBtn.disabled = true;
+    manualUndoBtn.style.display = 'none';
+    manualCopyBtn.style.display = 'none';
+    manualDownloadBtn.style.display = 'none';
+    setManualStatus('');
     imageQueue = [];
     processedCount = 0;
     fileInput.value = '';
@@ -332,6 +617,21 @@ function handleFiles(files) {
         if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
         if (item.processedUrl) URL.revokeObjectURL(item.processedUrl);
     });
+
+    if (currentMode === 'watermark' && currentSubMode === 'manual') {
+        const file = valid[0];
+        const item = {
+            id: Date.now(), file, name: file.name, status: 'pending',
+            originalImg: null, processedMeta: null, processedBlob: null,
+            originalUrl: null, processedUrl: null,
+        };
+        imageQueue = [item];
+        processedCount = 0;
+        singlePreview.style.display = 'none';
+        multiPreview.style.display = 'none';
+        startManualEditor(item);
+        return;
+    }
 
     imageQueue = valid.map((file, i) => ({
         id: Date.now() + i, file, name: file.name, status: 'pending',

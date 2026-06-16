@@ -110,6 +110,17 @@
         </div>
       </div>
 
+      <div id="watermarkSubModeToggle" class="flex justify-center mb-6">
+        <div class="inline-flex bg-gray-50 dark:bg-gray-800/60 rounded-lg p-1 gap-1 border border-gray-200 dark:border-gray-700">
+          <button id="subAuto"
+            class="px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+            data-i18n="sub.auto">Auto</button>
+          <button id="subManual"
+            class="px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            data-i18n="sub.manual">Manual</button>
+        </div>
+      </div>
+
       <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-soft p-2 md:p-3 border border-emerald-100 dark:border-gray-700 transition-colors duration-200">
         <div id="uploadArea" class="group relative flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-emerald-200 dark:border-gray-600 rounded-xl bg-emerald-50/30 dark:bg-gray-700/30 hover:bg-emerald-50 dark:hover:bg-gray-700/50 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all cursor-pointer">
           <div class="flex flex-col items-center justify-center pt-5 pb-6">
@@ -219,6 +230,57 @@
         </button>
       </div>
       <div id="imageList" class="space-y-4"></div>
+    </section>
+
+    <section id="manualEditor" class="max-w-7xl mx-auto px-4 pb-24" style="display: none;">
+      <div class="flex flex-col lg:flex-row gap-8">
+        <div class="flex-1 space-y-8">
+          <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-card overflow-hidden border border-gray-100 dark:border-gray-700">
+            <div class="bg-gray-50 dark:bg-gray-900 px-6 py-3 border-b border-gray-100 dark:border-gray-700">
+              <h3 class="font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> <span data-i18n="manual.title">Select Watermark Area</span>
+              </h3>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1" data-i18n="manual.hint">Drag a box over the watermark, then click "Remove Selected Area".</p>
+            </div>
+            <div class="relative w-full overflow-auto bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0iI2Y5ZmRmZCI+PHJlY3Qgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjZjJmMmYyIi8+PHJlY3QgeD0iMTAiIHk9IjEwIiB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiNmMmYyZjIiLz48L3N2Zz4=')] select-none flex items-center justify-center p-4" style="max-height: 70vh;">
+              <div id="manualCanvasWrap" class="relative inline-block touch-none">
+                <canvas id="manualCanvas" class="block max-w-full cursor-crosshair" style="max-height: 65vh;"></canvas>
+                <div id="manualSelectionBox" class="absolute border-2 border-indigo-500 bg-indigo-500/20 pointer-events-none" style="display: none;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="w-full lg:w-80 flex-shrink-0">
+          <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6 sticky top-24 transition-colors">
+            <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-6" data-i18n="panel.title">操作面板</h4>
+
+            <div class="space-y-3">
+              <button id="manualApplyBtn" disabled class="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                <span data-i18n="manual.apply">Remove Selected Area</span>
+              </button>
+
+              <button id="manualUndoBtn" class="w-full py-3 px-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-xl font-medium transition-all flex items-center justify-center gap-2" style="display: none;">
+                <span data-i18n="manual.undo">Undo</span>
+              </button>
+
+              <button id="manualCopyBtn" class="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2" style="display: none;">
+                <span data-i18n="btn.copy">复制结果</span>
+              </button>
+
+              <button id="manualDownloadBtn" class="w-full py-3.5 px-4 bg-gray-900 hover:bg-black dark:bg-primary dark:hover:bg-primary-hover text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2" style="display: none;">
+                <span data-i18n="btn.download">下载结果</span>
+              </button>
+
+              <button id="manualResetBtn" class="w-full py-3.5 px-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 hover:text-gray-900 dark:hover:text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+                <span data-i18n="btn.reset">重置 / 更换图片</span>
+              </button>
+            </div>
+
+            <div id="manualStatusMessage" class="mt-6 text-sm text-gray-500 dark:text-gray-400 min-h-[1.25rem]"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="bg-gray-50 dark:bg-gray-900 py-16 border-t border-gray-100 dark:border-gray-800 transition-colors">
