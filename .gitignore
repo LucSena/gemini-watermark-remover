@@ -1,6 +1,10 @@
 # dependencies
 node_modules
 
+# lockfiles (pnpm is the project package manager)
+package-lock.json
+yarn.lock
+
 # misc
 .DS_Store
 .history

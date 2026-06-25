@@ -2,6 +2,7 @@ import {
     computeRegionGradientCorrelation,
     computeRegionSpatialCorrelation
 } from './adaptiveDetector.js';
+import { cloneImageData } from '../shared/imageData.js';
 
 const NEAR_BLACK_THRESHOLD = 5;
 const TEXTURE_REFERENCE_MARGIN = 1;
@@ -14,21 +15,7 @@ const DEFAULT_HALO_MAX_ALPHA = 0.35;
 const DEFAULT_HALO_OUTSIDE_ALPHA_MAX = 0.01;
 const DEFAULT_HALO_OUTER_MARGIN = 3;
 
-export function cloneImageData(imageData) {
-    if (typeof ImageData !== 'undefined' && imageData instanceof ImageData) {
-        return new ImageData(
-            new Uint8ClampedArray(imageData.data),
-            imageData.width,
-            imageData.height
-        );
-    }
-
-    return {
-        width: imageData.width,
-        height: imageData.height,
-        data: new Uint8ClampedArray(imageData.data)
-    };
-}
+export { cloneImageData };
 
 export function calculateNearBlackRatio(imageData, position) {
     let nearBlack = 0;

@@ -24,13 +24,17 @@ function isAllowedMessageSource(eventSource, targetWindow) {
     if (eventSource.window === targetWindow || eventSource.self === targetWindow) {
       return true;
     }
-  } catch {}
+  } catch (_) {
+    // Cross-origin frame access may throw; safe to ignore.
+  }
 
   try {
     if (targetWindow.window === eventSource || targetWindow.self === eventSource) {
       return true;
     }
-  } catch {}
+  } catch (_) {
+    // Cross-origin frame access may throw; safe to ignore.
+  }
 
   return false;
 }

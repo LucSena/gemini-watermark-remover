@@ -5,6 +5,7 @@ import {
     computeRegionSpatialCorrelation,
     warpAlphaMap
 } from './adaptiveDetector.js';
+import { cloneImageData } from '../shared/imageData.js';
 import {
     calculateNearBlackRatio,
     scoreRegion,
@@ -67,22 +68,6 @@ function nowMs() {
         return globalThis.performance.now();
     }
     return Date.now();
-}
-
-function cloneImageData(imageData) {
-    if (typeof ImageData !== 'undefined' && imageData instanceof ImageData) {
-        return new ImageData(
-            new Uint8ClampedArray(imageData.data),
-            imageData.width,
-            imageData.height
-        );
-    }
-
-    return {
-        width: imageData.width,
-        height: imageData.height,
-        data: new Uint8ClampedArray(imageData.data)
-    };
 }
 
 function normalizeMetaPosition(position) {

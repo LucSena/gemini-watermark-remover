@@ -1,5 +1,6 @@
 import { warpAlphaMap } from './adaptiveDetector.js';
 import { removeWatermark } from './blendModes.js';
+import { cloneImageData } from '../shared/imageData.js';
 
 function clamp01(value) {
     if (!Number.isFinite(value)) return 0;
@@ -110,14 +111,6 @@ export function blurAlphaMap(alphaMap, size, radius = 0) {
     }
 
     return current;
-}
-
-function cloneImageData(imageData) {
-    return {
-        width: imageData.width,
-        height: imageData.height,
-        data: new Uint8ClampedArray(imageData.data)
-    };
 }
 
 function clampChannel(value) {
@@ -366,10 +359,6 @@ export function measurePreviewBoundaryMetrics(candidateImageData, previewImageDa
         normalizer,
         normalizedScore: rawScore / normalizer
     };
-}
-
-function measurePreviewBoundaryContinuity(candidateImageData, previewImageData, position) {
-    return measurePreviewBoundaryMetrics(candidateImageData, previewImageData, position).normalizedScore;
 }
 
 export function buildPreviewNeighborhoodPrior({
