@@ -1,141 +1,252 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terms of Use - Gemini Watermark Remover</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: '#10B981', 
-            'primary-hover': '#059669',
-            dark: '#1F2937',
-          },
-          boxShadow: {
-            'soft': '0 4px 20px -2px rgba(16, 185, 129, 0.1)',
-            'card': '0 0 20px rgba(0,0,0,0.05)'
-          }
-        }
-      }
-    }
-  </script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="description" content="Terms of use and privacy policy for Gemini Watermark Remover — a free, private, browser-based watermark removal tool.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310B981' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3-1.9 5.8-5.8 1.9 5.8 1.9 1.9 5.8 1.9-5.8 5.8-1.9-5.8-1.9z'/%3E%3C/svg%3E">
+
+  <link rel="stylesheet" href="tailwind.css">
   <style>
     body { font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #10B981; border-radius: 3px; }
+
+    body.loading { opacity: 0; }
+    body { transition: opacity 0s; }
+
+    html.dark body { background: #0f172a; }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in { animation: fade-in 0.4s ease-out both; }
+
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-up { animation: slide-up 0.5s ease-out both; }
+
+    .terms-content section {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      transition: all 0.3s;
+    }
+    html.dark .terms-content section {
+      background: rgba(30, 41, 59, 0.5);
+      border-color: rgba(51, 65, 85, 0.5);
+    }
+    @media (min-width: 768px) {
+      .terms-content section { padding: 2rem; }
+    }
+    .terms-content section h3 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 0.75rem;
+    }
+    html.dark .terms-content section h3 {
+      color: #fff;
+    }
+    .terms-content section p {
+      font-size: 0.875rem;
+      line-height: 1.625;
+      color: #475569;
+    }
+    html.dark .terms-content section p {
+      color: #cbd5e1;
+    }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased selection:bg-primary selection:text-white flex flex-col min-h-screen">
+<body class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 antialiased selection:bg-emerald-500/20 selection:text-emerald-900 dark:selection:text-emerald-200 flex flex-col min-h-screen loading transition-colors duration-300">
 
-  <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-1">
-        <svg class="h-10 w-10 text-indigo-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m12 3-1.9 5.8-5.8 1.9 5.8 1.9 1.9 5.8 1.9-5.8 5.8-1.9-5.8-1.9Z"></path>
-        </svg>
-        <h1 class="text-sm font-bold tracking-tight text-primary md:text-xl">
-          <a href="./" class="hover:text-primary transition-colors" title="Gemini Watermark Remover">Gemini <span class="text-gray-700 font-medium">Watermark Remover</span></a>
-        </h1>
-      </div>
+  <!-- Header -->
+  <header class="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 transition-colors duration-300">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <a href="./" class="flex items-center gap-2 group" title="Gemini Watermark Remover">
+        <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center group-hover:scale-105 transition-transform">
+          <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.9 5.8-5.8 1.9 5.8 1.9 1.9 5.8 1.9-5.8 5.8-1.9-5.8-1.9Z"></path>
+          </svg>
+        </div>
+        <span class="text-sm font-bold tracking-tight text-emerald-600 dark:text-emerald-400 md:text-base">Gemini <span class="text-slate-500 dark:text-slate-400 font-normal">Watermark Remover</span></span>
+      </a>
+      <button id="themeToggle" class="p-2 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" title="Toggle theme">
+        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+      </button>
     </div>
   </header>
 
-  <main class="flex-grow py-12 px-4 sm:px-6">
-    <div class="max-w-4xl mx-auto">
-      
-      <div class="text-center mb-12">
-        <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Terms of Use</h2>
-        <p class="text-sm text-gray-400 mt-2">Last updated: April 7, 2026</p>
+  <main class="flex-grow">
+    <!-- Hero -->
+    <section class="relative pt-12 pb-8 md:pt-16 md:pb-10 px-4 overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-b from-emerald-50/60 via-white to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-900 -z-10 transition-colors duration-300"></div>
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-emerald-400/5 dark:bg-emerald-500/5 rounded-full blur-3xl -z-10"></div>
+
+      <div class="max-w-4xl mx-auto text-center">
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 dark:text-white mb-3">
+          Terms of Use
+        </h2>
+        <p class="text-sm text-slate-400 dark:text-slate-500">Last updated: June 25, 2026</p>
+      </div>
+    </section>
+
+    <!-- Content -->
+    <section class="max-w-4xl mx-auto px-4 pb-16 md:pb-24">
+      <!-- Disclaimer -->
+      <div class="bg-amber-50/70 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/30 rounded-2xl p-6 md:p-8 mb-8 animate-fade-in transition-colors duration-300">
+        <div class="flex items-start gap-4">
+          <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center mt-0.5">
+            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">Important Disclaimer</h3>
+            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              This project is released under the <strong>MIT License</strong>. The software is provided "as is", without warranty of any kind.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-card border border-amber-100 overflow-hidden mb-10">
-        <div class="bg-amber-50/50 border-b border-amber-100 px-6 py-4 flex items-center gap-3">
-          <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-          <h3 class="text-lg font-bold text-gray-800">Important Disclaimer</h3>
-        </div>
-        
-        <div class="p-6 md:p-8 space-y-6">
-          <div class="flex gap-4">
-            <div>
-              <p class="font-semibold text-gray-900">This project is released under the MIT License.</p>
-            </div>
-          </div>
-
-          <div class="border-t border-dashed border-gray-200 my-2"></div>
-
-          <p class="text-sm font-bold text-gray-500 uppercase tracking-wider pl-10">A few things to keep in mind</p>
-
-          <div class="flex gap-4">
-            <div class="flex-shrink-0 mt-1">
-              <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path></svg>
+      <!-- Terms Content -->
+      <div class="terms-content space-y-6 animate-fade-in" style="animation-delay: 0.1s">
+        <section>
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mt-0.5">
+              <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"></path>
+              </svg>
             </div>
             <div>
-              <p class="font-semibold text-gray-900">Respect content policies.</p>
-              <p class="text-gray-600 mt-1 text-sm">The removal of watermarks may have legal or ethical implications depending on how you use the resulting images.</p>
-            </div>
-          </div>
-
-          <div class="flex gap-4">
-            <div class="flex-shrink-0 mt-1">
-              <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
-            </div>
-            <div>
-              <p class="font-semibold text-gray-900">This tool removes visible watermarks only.</p>
-              <p class="text-gray-600 mt-1 text-sm">It does not affect any invisible/steganographic watermarks that may be embedded in the image data.</p>
-
-              <p class="text-orange-700 mt-1 bg-orange-50 inline-block px-2 py-1 rounded text-sm">
-                <a href="https://support.google.com/gemini/answer/16722517" target="_blank" rel="noopener noreferrer">
-                  Learn more about SynthID
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                  </svg>
-                </a>
+              <h3>Respect Content Policies</h3>
+              <p>
+                The removal of watermarks may have legal or ethical implications depending on how you use the resulting images. You are solely responsible for ensuring your use complies with applicable laws and platform terms of service.
               </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div class="space-y-6 text-gray-600">
-        <section class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 class="text-lg font-bold text-gray-900 mb-3">Privacy Policy</h3>
-          <p class="leading-relaxed text-sm">
-            This service provides browser-based image processing. All processing is done locally on your device. We do not upload your images to any remote servers.
-          </p>
         </section>
 
-        <section class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 class="text-lg font-bold text-gray-900 mb-3">Limitation of Liability</h3>
-          <p class="leading-relaxed text-sm">
-            The tool is provided "as is". The developer shall not be liable for any data loss, image corruption, or legal disputes arising from the use of this tool.
-          </p>
+        <section>
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mt-0.5">
+              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+              </svg>
+            </div>
+            <div>
+              <h3>Visible Watermarks Only</h3>
+              <p>
+                This tool removes visible watermarks from Gemini AI generated images. It does not affect any invisible or steganographic watermarks (such as <a href="https://support.google.com/gemini/answer/16722517" target="_blank" rel="noopener noreferrer" class="text-emerald-600 dark:text-emerald-400 hover:underline font-medium">SynthID</a>) that may be embedded in the image data.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mt-0.5">
+              <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3>Privacy Policy</h3>
+              <p>
+                This tool performs all image processing locally in your browser. No images are uploaded to any remote server. We do not collect, store, or transmit your data. No analytics or tracking cookies are used.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mt-0.5">
+              <svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3>Limitation of Liability</h3>
+              <p>
+                The tool is provided "as is" without warranty of any kind. The developer shall not be liable for any data loss, image corruption, or legal disputes arising from the use of this tool.
+              </p>
+            </div>
+          </div>
         </section>
       </div>
 
-      <div class="mt-12 text-center">
-        <a href="index.html" class="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-700 font-medium text-xs md:text-base rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      <!-- Back link -->
+      <div class="mt-10 text-center animate-fade-in" style="animation-delay: 0.2s">
+        <a href="./" class="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium text-sm rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
           Back to the tool
         </a>
       </div>
-
-    </div>
+    </section>
   </main>
 
-  <footer class="bg-emerald-600 text-white pt-12 pb-8 mt-auto">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center text-sm text-emerald-200">
-        <p>&copy; <span id="year">2025</span> Gemini Watermark Remover. Released under the MIT License.</p>
+  <!-- Footer -->
+  <footer class="bg-slate-900 dark:bg-slate-950 text-slate-400 py-10">
+    <div class="max-w-6xl mx-auto px-4 text-center">
+      <p class="text-xs leading-relaxed mb-6 max-w-lg mx-auto">
+        Open-source Gemini watermark remover. Use responsibly and comply with applicable laws and platform terms.
+      </p>
+      <div class="flex items-center justify-center gap-4 text-xs font-medium">
+        <a href="terms.html" class="text-emerald-400 transition-colors">Terms of Use</a>
+        <span class="text-slate-700">·</span>
+        <a href="https://github.com/lucsena/gemini-watermark-remover" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">GitHub</a>
+        <span class="text-slate-700">·</span>
+        <a href="https://allenkuo.medium.com/removing-gemini-ai-watermarks-a-deep-dive-into-reverse-alpha-blending-bbbd83af2a3f" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">How It Works</a>
+      </div>
+      <div class="mt-6 pt-6 border-t border-slate-800 text-xs text-slate-600">
+        <p>&copy; <span id="year">2026</span> Gemini Watermark Remover. MIT License.</p>
       </div>
     </div>
   </footer>
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
 
+  <script>
+    // Dark mode
+    (function() {
+      var html = document.documentElement;
+      var toggle = document.getElementById('themeToggle');
+
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        html.classList.add('dark');
+      } else {
+        html.classList.remove('dark');
+      }
+
+      if (toggle) {
+        toggle.addEventListener('click', function() {
+          if (html.classList.contains('dark')) {
+            html.classList.remove('dark');
+            localStorage.theme = 'light';
+          } else {
+            html.classList.add('dark');
+            localStorage.theme = 'dark';
+          }
+        });
+      }
+
+      // Set year
+      document.getElementById('year').textContent = new Date().getFullYear();
+
+      // Remove loading class
+      document.body.classList.remove('loading');
+    })();
+  </script>
 </body>
 </html>
