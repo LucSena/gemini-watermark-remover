@@ -7,7 +7,7 @@
   "main.title": "Gemini AI Watermark Removal",
   "main.subtitle": "Based on reverse alpha blending algorithm, pure browser-side processing, Free, Fast, and Lossless",
   "upload.text": "Click to select or drag images here",
-  "upload.hint": "Supports JPG, PNG, WebP",
+  "upload.hint": "Images: JPG, PNG, WebP · Videos: MP4, WebM (up to 300MB)",
   "step.1": "Select Original Image",
   "step.2": "Auto Processing",
   "step.3": "Save Clean Image",
@@ -47,5 +47,14 @@
   "info.position": "Position",
   "info.status": "Status",
   "info.removed": "Watermark Removed",
-  "info.skipped": "No removable watermark detected; original kept"
+  "info.skipped": "No removable watermark detected; original kept",
+  "video.compare": "Video",
+  "video.status.calibrating": "Detecting watermark…",
+  "video.status.processing": "Removing watermark… this can take about as long as the video itself",
+  "video.status.done": "Watermark removed",
+  "video.status.skipped": "No removable watermark detected; keeping the original video",
+  "video.status.error": "Couldn't process this video in your browser",
+  "video.status.unsupported": "Your browser doesn't support in-browser video processing",
+  "video.status.tooLarge": "Video is too large (max 300MB)",
+  "video.status.multiple": "Only one video can be processed at a time; using the first one"
 }

@@ -7,7 +7,7 @@
 	"main.title": "Remoção de marca d'água da IA Gemini",
 	"main.subtitle": "Baseado em algoritmo de mistura alfa reversa, processamento totalmente no navegador, gratuito, rápido e sem perdas.",
 	"upload.text": "Clique para selecionar ou arraste as imagens para cá.",
-	"upload.hint": "Suporta JPG, PNG, WebP",
+	"upload.hint": "Imagens: JPG, PNG, WebP · Vídeos: MP4, WebM (até 300MB)",
 	"step.1": "Selecione a imagem original",
 	"step.2": "Processamento automático",
 	"step.3": "Salvar imagem limpa",
@@ -47,5 +47,14 @@
 	"info.position": "Posição",
 	"info.status": "Status",
 	"info.removed": "Marca d'água removida",
-	"info.skipped": "Nenhuma marca d'água removível detectada; imagem original mantida"
+	"info.skipped": "Nenhuma marca d'água removível detectada; imagem original mantida",
+	"video.compare": "Vídeo",
+	"video.status.calibrating": "Detectando marca d'água…",
+	"video.status.processing": "Removendo marca d'água... isso pode levar cerca do mesmo tempo que a duração do vídeo",
+	"video.status.done": "Marca d'água removida",
+	"video.status.skipped": "Nenhuma marca d'água removível detectada; vídeo original mantido",
+	"video.status.error": "Não foi possível processar este vídeo neste navegador",
+	"video.status.unsupported": "Seu navegador não suporta processamento de vídeo local",
+	"video.status.tooLarge": "Vídeo muito grande (máx. 300MB)",
+	"video.status.multiple": "Apenas um vídeo pode ser processado por vez; usando o primeiro"
 }

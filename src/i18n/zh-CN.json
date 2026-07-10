@@ -7,7 +7,7 @@
   "main.title": "Gemini AI 图像去水印",
   "main.subtitle": "基于反向 Alpha 混合算法，纯浏览器本地处理，免费、极速、无损",
   "upload.text": "点击选择 或 拖拽图片至此",
-  "upload.hint": "支持 JPG, PNG, WebP",
+  "upload.hint": "支持 JPG, PNG, WebP 图片 · MP4, WebM 视频（最大 300MB）",
   "step.1": "选择原始图片",
   "step.2": "算法自动解析",
   "step.3": "保存无水印图",
@@ -47,5 +47,14 @@
   "info.position": "位置",
   "info.status": "状态",
   "info.removed": "水印已移除",
-  "info.skipped": "未检测到可移除水印，已保留原图"
+  "info.skipped": "未检测到可移除水印，已保留原图",
+  "video.compare": "视频",
+  "video.status.calibrating": "正在检测水印…",
+  "video.status.processing": "正在去除水印…耗时约等于视频时长",
+  "video.status.done": "水印已移除",
+  "video.status.skipped": "未检测到可移除水印，已保留原视频",
+  "video.status.error": "当前浏览器无法处理该视频",
+  "video.status.unsupported": "当前浏览器不支持本地视频处理",
+  "video.status.tooLarge": "视频过大（最大 300MB）",
+  "video.status.multiple": "一次仅能处理一个视频，已使用第一个"
 }

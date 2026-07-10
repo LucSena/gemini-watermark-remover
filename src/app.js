@@ -9,6 +9,10 @@ import {
     resolveDisplayWatermarkInfo
 } from './core/watermarkDisplay.js';
 import { canvasToBlob } from './core/canvasBlob.js';
+import {
+    removeVideoWatermark,
+    isVideoWatermarkRemovalSupported
+} from './core/videoWatermarkEngine.js';
 import i18n from './i18n.js';
 import {
     loadImage,
@@ -41,6 +45,18 @@ const processedInfo = document.getElementById('processedInfo');
 const downloadBtn = document.getElementById('downloadBtn');
 const copyBtn = document.getElementById('copyBtn');
 const resetBtn = document.getElementById('resetBtn');
+const videoPreview = document.getElementById('videoPreview');
+const originalVideo = document.getElementById('originalVideo');
+const processedVideo = document.getElementById('processedVideo');
+const videoDownloadBtn = document.getElementById('videoDownloadBtn');
+const videoResetBtn = document.getElementById('videoResetBtn');
+const videoStatusMessage = document.getElementById('videoStatusMessage');
+const videoProgressWrap = document.getElementById('videoProgressWrap');
+const videoProgressBar = document.getElementById('videoProgressBar');
+const videoProgressText = document.getElementById('videoProgressText');
+
+const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
+const VALID_VIDEO_TYPES = /^video\/(mp4|webm|quicktime)(;|$)/;
 
 async function getEngine() {
     if (!enginePromise) {
@@ -169,6 +185,7 @@ function setupEventListeners() {
 
     downloadAllBtn.addEventListener('click', downloadAll);
     resetBtn.addEventListener('click', reset);
+    videoResetBtn.addEventListener('click', resetVideo);
     window.addEventListener('beforeunload', () => {
         disableWorkerClient('beforeunload');
     });
@@ -193,6 +210,15 @@ function handleFileSelect(e) {
 function handleFiles(files) {
     setStatusMessage('');
 
+    const videoFiles = files.filter(file => file.type.startsWith('video/'));
+    if (videoFiles.length > 0) {
+        if (videoFiles.length > 1) {
+            setVideoStatusMessage(i18n.t('video.status.multiple'));
+        }
+        handleVideoFile(videoFiles[0]);
+        return;
+    }
+
     const validFiles = files.filter(file => {
         if (!file.type.match('image/(jpeg|png|webp)')) return false;
         if (file.size > 20 * 1024 * 1024) return false;
@@ -200,6 +226,8 @@ function handleFiles(files) {
     });
 
     if (validFiles.length === 0) return;
+
+    videoPreview.style.display = 'none';
 
     imageQueue.forEach(item => {
         if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
@@ -232,6 +260,108 @@ function handleFiles(files) {
         multiPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
         imageQueue.forEach(item => createImageCard(item));
         processQueue();
+    }
+}
+
+function setVideoStatusMessage(message = '', type = '') {
+    if (!videoStatusMessage) return;
+    videoStatusMessage.textContent = message;
+    videoStatusMessage.classList.toggle('text-amber-500', type === 'warn');
+    videoStatusMessage.classList.toggle('dark:text-amber-400', type === 'warn');
+}
+
+function updateVideoProgress(fraction) {
+    const percent = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+    videoProgressBar.style.width = `${percent}%`;
+    videoProgressText.textContent = `${percent}%`;
+}
+
+function resetVideoUI() {
+    if (originalVideo.src) URL.revokeObjectURL(originalVideo.src);
+    if (processedVideo.src) URL.revokeObjectURL(processedVideo.src);
+    originalVideo.removeAttribute('src');
+    originalVideo.load();
+    processedVideo.removeAttribute('src');
+    processedVideo.load();
+    videoDownloadBtn.style.display = 'none';
+    videoDownloadBtn.onclick = null;
+    videoProgressWrap.style.display = 'none';
+    videoProgressBar.style.width = '0%';
+    videoProgressText.textContent = '0%';
+    setVideoStatusMessage('');
+}
+
+function resetVideo() {
+    resetVideoUI();
+    videoPreview.style.display = 'none';
+    fileInput.value = '';
+    uploadArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function downloadVideo(originalName, result) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(result.blob);
+    const base = originalName.replace(/\.[^.]+$/, '');
+    a.download = `unwatermarked_${base}.${result.extension}`;
+    a.click();
+}
+
+async function handleVideoFile(file) {
+    if (!VALID_VIDEO_TYPES.test(file.type)) {
+        resetVideoUI();
+        videoPreview.style.display = 'block';
+        videoPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setVideoStatusMessage(i18n.t('video.status.error'), 'warn');
+        return;
+    }
+
+    if (file.size > MAX_VIDEO_BYTES) {
+        resetVideoUI();
+        videoPreview.style.display = 'block';
+        videoPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setVideoStatusMessage(i18n.t('video.status.tooLarge'), 'warn');
+        return;
+    }
+
+    singlePreview.style.display = 'none';
+    multiPreview.style.display = 'none';
+    resetVideoUI();
+    videoPreview.style.display = 'block';
+    videoPreview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    originalVideo.src = URL.createObjectURL(file);
+
+    if (!isVideoWatermarkRemovalSupported()) {
+        setVideoStatusMessage(i18n.t('video.status.unsupported'), 'warn');
+        return;
+    }
+
+    videoProgressWrap.style.display = 'block';
+    setVideoStatusMessage(i18n.t('video.status.calibrating'));
+
+    try {
+        const engine = await getEngine();
+        const result = await removeVideoWatermark(engine, file, {
+            onStatus: (status) => setVideoStatusMessage(i18n.t(`video.status.${status}`)),
+            onProgress: updateVideoProgress
+        });
+
+        videoProgressWrap.style.display = 'none';
+
+        if (!result.applied) {
+            setVideoStatusMessage(i18n.t('video.status.skipped'));
+            return;
+        }
+
+        processedVideo.src = URL.createObjectURL(result.blob);
+        setVideoStatusMessage(i18n.t('video.status.done'));
+
+        videoDownloadBtn.style.display = 'flex';
+        videoDownloadBtn.onclick = () => downloadVideo(file.name, result);
+    } catch (error) {
+        console.error(error);
+        videoProgressWrap.style.display = 'none';
+        setVideoStatusMessage(i18n.t('video.status.error'), 'warn');
     }
 }
 
