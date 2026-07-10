@@ -52,6 +52,8 @@
     "benchmark:samples": "node scripts/sample-benchmark.js"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
+    "@mediapipe/tasks-vision": "^0.10.35",
     "jszip": "^3.10.1",
     "medium-zoom": "^1.1.0",
     "sharp": "^0.34.5"
